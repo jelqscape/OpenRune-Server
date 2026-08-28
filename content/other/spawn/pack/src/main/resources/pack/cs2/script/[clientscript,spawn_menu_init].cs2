@@ -1,0 +1,6 @@
+[clientscript,spawn_menu_init](component $border, component $grid, component $scrollbar)
+// Placeholder scroll height - real per-search sizing happens via
+// [clientscript,spawn_menu_set_scrollsize].cs2 instead.
+~stoneborder($border, "Item Spawner", 0);
+if_setscrollsize(0, 100, $grid);
+~scrollbar_vertical($scrollbar, $grid, "scrollbar_dragger_v2,3", "scrollbar_dragger_v2,0", "scrollbar_dragger_v2,1", "scrollbar_dragger_v2,2", "scrollbar_v2,0", "scrollbar_v2,1");
