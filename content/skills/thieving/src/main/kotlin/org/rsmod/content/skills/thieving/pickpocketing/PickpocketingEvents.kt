@@ -79,6 +79,12 @@ constructor(
         npc: Npc,
         definition: PickpocketDefinition,
     ): Boolean {
+        if (ThievingStun.isRetryLocked(player)) {
+            // No message here - repeated clicks/attempts during the retry-lock window (the 2-tick
+            // post-success delay or the longer post-failure stun) are just silently ignored, the
+            // same as spam-clicking any other skilling action mid-delay.
+            return false
+        }
         val blockMessage = cannotPickpocket(definition)
         if (blockMessage != null) {
             mes(blockMessage)
@@ -108,6 +114,14 @@ constructor(
 
         mes("You fail to pick the $npcName's pocket.")
         npc.facePlayer(player)
+        // `facePlayer` has no natural per-tick reset for npcs (unlike the player side, which resets
+        // every cycle in `PlayerMainProcess`) - without this timer the npc stays visually "facing"
+        // the player forever, which looked like it was locking on and chasing even though nothing
+        // else about combat/AI ever actually engaged. The npc itself isn't supposed to stay engaged
+        // with you after this - it's the player who's stunned/frozen for `definition.stunTicks`, not
+        // the npc, which should be free to just resume its own business (wandering off included).
+        // So this only needs to outlast the 1-tick-delayed hit landing, not the player's full stun.
+        npc.timer("timer.thieving_npc_face_reset", FACE_RESET_TICKS)
         val damage = random.of(definition.stunDamageMin..definition.stunDamageMax)
         queueHit(source = npc, delay = 1, type = HitType.Typeless, damage = damage)
         ThievingStun.apply(player, definition.stunTicks)
@@ -115,14 +129,14 @@ constructor(
     }
 
     private fun ProtectedAccess.cannotPickpocket(definition: PickpocketDefinition): String? {
-        if (ThievingStun.isRetryLocked(player)) {
-            return "You're still recovering from your last attempt."
-        }
         if (player.thievingLvl < definition.level) {
             return "You need a Thieving level of ${definition.level} to pickpocket this NPC."
         }
         if (inv.isFull()) {
             return "You don't have enough inventory space to do this."
+        }
+        if (definition.coinPouch != null && CoinPouches.heldCount(inv) >= CoinPouches.CAP) {
+            return "You need to empty some of your coin pouches before you can pickpocket for more."
         }
         return null
     }
@@ -166,5 +180,8 @@ constructor(
     private companion object {
         const val TZHAAR_BURN_DAMAGE = 4
         const val SUCCESS_DELAY_TICKS = 2
+
+        /** How long the npc's brief "notices you" face-reaction lasts before resetting. */
+        const val FACE_RESET_TICKS = 2
     }
 }

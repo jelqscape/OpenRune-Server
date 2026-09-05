@@ -38,6 +38,10 @@ Working from a 3-tier plan agreed with the user:
   instead of `getItemTypes()` - compiled fine since both types happen to expose
   `category`/`internalName`, but it meant zero pouches ever got a handler and every one produced
   the engine's generic "Nothing interesting happens." Fixed at the source.
+- **Coin pouch cap**: base 28-pouch inventory cap implemented (`CoinPouches.CAP`, summed across
+  every pouch variant combined, matching the wiki's own wording) - a pickpocket attempt on any
+  coin-pouch-yielding NPC is blocked once you're holding 28. Ardougne Diary's cap increase
+  (56/84/140) is not wired up, see gaps below.
 - **Rewards**: reworked once already - the wiki's tables are *mutually exclusive* outcomes (a
   successful Rogue pickpocket gives coins **or** a rune **or** a lockpick, never both), not "always
   give the coin pouch, then separately roll a bonus item" like the first pass had it. Fixed in
@@ -57,6 +61,16 @@ Working from a 3-tier plan agreed with the user:
   a failed attempt uses, just without the freeze.
 - **Stun visual**: `spotanim.stunned_thieving` (a real, dedicated gameval for exactly this) now
   plays above the player's head when a failed attempt triggers the stun.
+- **NPC face-lock bug**: a failed attempt calls `npc.facePlayer(player)` for the momentary "notices
+  you" reaction, but npcs have no per-tick face reset the way players do
+  (`PlayerMainProcess` resets it every cycle; there's no npc equivalent) - so without an explicit
+  reset the npc stayed visually facing/turning toward the player forever afterward, which looked
+  like it was locking on and chasing even though no actual combat/AI state ever changed (confirmed:
+  no health bar, no attack anim, only on failure). Fixed with a short `timer.thieving_npc_face_reset`
+  (new gameval, id 37) that calls `npc.resetFaceEntity()` 2 ticks later - only the *player* is
+  stunned/frozen after a failure, not the npc, which should be free to go back to its own business
+  (wandering off included) well before your stun ends, so this only needs to outlast the
+  1-tick-delayed fail-damage hit, not the full stun duration.
 - **Audit tooling**: `::thieveaudit [attemptsPerNpc]` sweeps every NPC below, one spawn-attempt-
   despawn cycle each; `::thieveaudit <id> [attempts]` drills into one. Paces a `delay(2)` after
   every individual attempt (not just once per NPC) so a failed attempt's 1-tick-delayed damage hit

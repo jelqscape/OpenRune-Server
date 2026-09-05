@@ -8,14 +8,16 @@ import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.random.GameRandom
 import org.rsmod.api.script.onOpHeld1
 import org.rsmod.api.script.onOpHeld2
+import org.rsmod.game.inv.Inventory
 import org.rsmod.game.inv.isType
 import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * "Players can have a stack of up to 28 coin pouches in their inventory, after which they must
- * open them before they can pickpocket more." - the Thieving wiki page. Opening one gives a
- * per-source amount of coins and is destroyed.
+ * "Up to 28 coin pouches can stack in a player's inventory, after which the player must open them
+ * to collect the coins inside before being able to pickpocket more." - the wiki's `Coin pouch`
+ * page. [CoinPouches.CAP] is that base 28; the Ardougne Diary increases it further
+ * (56/84/140 at Medium/Hard/Elite) but that bonus isn't wired up yet.
  *
  * Every coin pouch obj shares cache category 1249 with `Open-all` at op1 and `Open` at op2
  * (verified directly against several pouches' cache entries), so pouches are discovered
@@ -29,7 +31,7 @@ constructor(
 ) : PluginScript() {
     override fun ScriptContext.startup() {
         for (item in ServerCacheManager.getItemTypes()) {
-            if (item.category != COIN_POUCH_CATEGORY) continue
+            if (item.category != CoinPouches.CATEGORY) continue
             val amount = COIN_AMOUNTS[item.internalName] ?: continue
             onOpHeld1(item.internalName) { openPouch(it.slot, item.internalName, amount, all = true) }
             onOpHeld2(item.internalName) { openPouch(it.slot, item.internalName, amount, all = false) }
@@ -50,9 +52,6 @@ constructor(
     }
 
     private companion object {
-        /** Cache category shared by every `pickpocket_coin_pouch_*` obj. */
-        const val COIN_POUCH_CATEGORY = 1249
-
         /**
          * Min/max coins per pouch source, cross-checked against the wiki's own `Coin pouch` page
          * (Man x3, Guard x30, Knight of Ardougne x50, and every other exact/ranged amount below
@@ -79,4 +78,18 @@ constructor(
                 "obj.pickpocket_coin_pouch_elf" to 280..350,
             )
     }
+}
+
+/** Shared with [org.rsmod.content.skills.thieving.pickpocketing.PickpocketingEvents]'s cap check. */
+internal object CoinPouches {
+    /** Cache category shared by every `pickpocket_coin_pouch_*` obj. */
+    const val CATEGORY = 1249
+
+    /** Base cap before the (not yet implemented) Ardougne Diary bonus. */
+    const val CAP = 28
+
+    fun heldCount(inv: Inventory): Int =
+        inv.sumOf { obj ->
+            if (obj != null && ServerCacheManager.getItem(obj.id)?.category == CATEGORY) obj.count else 0
+        }
 }
